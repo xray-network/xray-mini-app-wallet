@@ -1,4 +1,6 @@
 import { SLOT_CONFIG_NETWORK, SLOT_EPOCH_DURATION, SLOT_STARTING_EPOCH } from "@/config"
+import { Buffer } from "buffer"
+import { crc8 } from "./crc8"
 import * as Types from "@/types"
 
 export const truncate = (string: string, start = 6, end = 6) => {
@@ -112,4 +114,74 @@ export const pageSizeToContentRange = (currentPage: number, pageSize: number) =>
 export const timestampToDateTime = (timestamp: number) => {
   const date = new Date(timestamp * 1000)
   return date.toLocaleString()
+}
+
+export const labelType = (label: number): string | undefined => {
+  switch (label) {
+    case 100:
+      return "ref"
+    case 222:
+      return "nft"
+    case 333:
+      return "ft"
+    case 444:
+      return "rft"
+    case 500:
+      return "royalty"
+    default:
+      return undefined
+  }
+}
+
+export const cip67Crc8Checksum = (num: string): string => {
+  return crc8(Buffer.from(num, "hex")).toString(16).padStart(2, "0")
+}
+
+export function cip67FromLabel(label: string): number | undefined {
+  if (label.length !== 8 || !(label[0] === "0" && label[7] === "0")) {
+    return undefined
+  }
+  const numHex = label.slice(1, 5)
+  const num = parseInt(numHex, 16)
+  const check = label.slice(5, 7)
+  return check === cip67Crc8Checksum(numHex) ? num : undefined
+}
+
+export const decodeAssetName = (assetName: string) => {
+  try {
+    const decode = (assetName: string) => {
+      const labelHex = (assetName || "").substring(0, 8)
+      const assetNameHex = (assetName || "").substring(8)
+      const label = cip67FromLabel(labelHex)
+      if (label) {
+        return {
+          assetNameAsciiNoLabel: Buffer.from(assetNameHex || "", "hex").toString("utf-8") || "",
+          label: labelHex,
+          labelAscii: label,
+          labelType: labelType(label),
+        }
+      } else {
+        return undefined
+      }
+    }
+    const decoded = decode(assetName)
+    const assetNameAscii = Buffer.from(assetName || "", "hex").toString("utf-8") || ""
+    const assetNameAsciiNoLabel = decoded?.assetNameAsciiNoLabel || assetNameAscii
+    const format = /^([/\\\[\]*<>(),.!?@+=%&$#^'"|a-zA-Z0-9 _-]+)$/
+    const assetNameFinal = format.test(assetNameAsciiNoLabel) ? assetNameAsciiNoLabel : assetName
+    const assetNameFinalWithLabel = (decoded?.label ? `(${decoded?.labelAscii}) ` : "") + assetNameFinal
+    return {
+      assetName: assetName,
+      assetNameAscii: assetNameAscii,
+      assetNameAsciiNoLabel: assetNameAsciiNoLabel,
+      assetNameFinal: assetNameFinal,
+      assetNameFinalWithLabel: assetNameFinalWithLabel,
+      label: decoded?.label,
+      labelAscii: decoded?.labelAscii,
+      labelType: decoded?.labelType,
+    }
+  } catch (error) {
+    console.log("decodeAssetName", error)
+    return undefined
+  }
 }

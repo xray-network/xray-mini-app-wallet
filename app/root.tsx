@@ -70,36 +70,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function HydrateFallback() {
-  return (
-    <div
-      style={{
-        width: "100%vw",
-        height: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#000",
-      }}
-    >
-      <svg
-        width="59px"
-        height="37px"
-        viewBox="0 0 59 37"
-        version="1.1"
-        xmlns="http://www.w3.org/2000/svg"
-        xmlnsXlink="http://www.w3.org/1999/xlink"
-      >
-        <g stroke="none" strokeWidth="1" fill="#ffffff" fillRule="evenodd">
-          <path
-            d="M27.2644887,12.845956 L40.286334,0 L57.8748681,0 L34.5892767,22.6565806 L31.6051038,23.7948299 L18.2215405,36.966 L0.135644222,36.966 L23.5116652,14.6888358 L27.2644887,12.845956 Z M0,0 L18.31197,0 L31.0625269,12.7375513 L34.9509946,14.7430381 L57.9652976,36.966 L39.4724687,36.966 L25.9984759,23.4696158 L22.0647935,21.4099267 L0,0 Z"
-            fillRule="nonzero"
-          />
-        </g>
-      </svg>
-    </div>
-  )
-}
+// export function HydrateFallback() {
+//   return (
+//     <div
+//       style={{
+//         width: "100%vw",
+//         height: "100vh",
+//         display: "flex",
+//         alignItems: "center",
+//         justifyContent: "center",
+//         background: "#000",
+//       }}
+//     >
+//       <svg
+//         width="59px"
+//         height="37px"
+//         viewBox="0 0 59 37"
+//         version="1.1"
+//         xmlns="http://www.w3.org/2000/svg"
+//         xmlnsXlink="http://www.w3.org/1999/xlink"
+//       >
+//         <g stroke="none" strokeWidth="1" fill="#ffffff" fillRule="evenodd">
+//           <path
+//             d="M27.2644887,12.845956 L40.286334,0 L57.8748681,0 L34.5892767,22.6565806 L31.6051038,23.7948299 L18.2215405,36.966 L0.135644222,36.966 L23.5116652,14.6888358 L27.2644887,12.845956 Z M0,0 L18.31197,0 L31.0625269,12.7375513 L34.9509946,14.7430381 L57.9652976,36.966 L39.4724687,36.966 L25.9984759,23.4696158 L22.0647935,21.4099267 L0,0 Z"
+//             fillRule="nonzero"
+//           />
+//         </g>
+//       </svg>
+//     </div>
+//   )
+// }
 
 export default function App() {
   return (

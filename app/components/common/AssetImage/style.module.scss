@@ -1,0 +1,50 @@
+@import "@/styles/mixins";
+
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 100px;
+  cursor: pointer;
+  width: rem(38);
+  height: rem(38);
+  color: $gray-4;
+  position: relative;
+  overflow: hidden;
+
+  &Loading {
+    position: absolute;
+    z-index: 4;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    @include transition-slow();
+
+    &Active {
+      opacity: 1;
+    }
+
+    :global(.xray-spinner) {
+      box-shadow: 0 0 7px rgba(0, 0, 0, 0.2);
+      border-color: $white !important;
+      border-right-color: transparent !important;
+    }
+  }
+
+  canvas,
+  :global(.paper),
+  :global(.paper svg) {
+    float: left;
+    height: 100% !important;
+    width: 100% !important;
+  }
+}
+
+// dark theme
+// [data-theme="dark"] {
+// }

@@ -1,17 +1,109 @@
 @import "@/styles/tailwind.css";
 
-.logo {
-  @apply inline-flex items-center grow-0 text-2xl font-black;
+.assetGroup :global(.ant-select-disabled .ant-select-selector) {
+  @apply bg-transparent! text-inherit! cursor-default!;
+}
 
-  svg {
-    @apply w-36;
+.assetGroup {
+  :global(.ant-input-number),
+  :global(.ant-btn),
+  :global(.ant-input),
+  :global(.ant-select-selector) {
+    @apply rounded-none!;
+  }
+}
 
-    g {
-      @apply fill-black dark:fill-white;
+.assetGroup :global(.ant-form-item:first-child) {
+  :global(.ant-input-number),
+  :global(.ant-btn),
+  :global(.ant-input),
+  :global(.ant-select-selector) {
+    @apply rounded-l-xl! rounded-r-none!;
+  }
+}
+
+.assetGroup :global(.ant-form-item:last-child) {
+  :global(.ant-input-number),
+  :global(.ant-btn),
+  :global(.ant-input),
+  :global(.ant-select-selector) {
+    @apply rounded-l-none! rounded-r-xl!;
+  }
+}
+
+.assetGroup :global(.ant-form-item) {
+  @apply -me-[1px]!;
+}
+
+.address {
+  &:not(:global(.ant-input-group-wrapper-status-error)) {
+    :global(.ant-input-group-addon) {
+      @apply border-gray-300 text-black;
+      @apply dark:border-gray-700 dark:text-white;
     }
   }
 
+  :global(.ant-input-group-addon) {
+    @apply bg-gray-50;
+    @apply dark:bg-gray-900;
+  }
+}
+
+.addressIndex {
+  @apply block min-w-8 font-bold;
+}
+
+.assetOption {
+  @apply px-2.5! py-2!;
+}
+
+.assetTickerAda {
+  width: 60%;
+}
+
+.assetQuantityAda {
+  width: 40%;
+}
+
+.assetTicker {
+  width: 60%;
+}
+
+.assetQuantity {
+  width: calc(40% - 50px);
+}
+
+.assetRemove {
+  width: 50px;
+
+  :global(.ant-btn) {
+    @apply text-gray-500 w-12;
+    @apply hover:text-blue-500;
+  }
+}
+
+.assetName {
+  @apply flex flex-col items-start justify-center;
+
   span {
-    @apply ms-3;
+    @apply block! leading-4 text-black font-bold;
+    @apply dark:text-white;
+  }
+
+  span:last-child {
+    @apply text-xs lowercase font-normal text-gray-500;
+  }
+}
+
+.assetInfo {
+  @apply flex items-center uppercase font-bold;
+  @apply dark:text-white;
+}
+
+.assetIcon {
+  @apply h-7 w-7 flex items-center justify-center overflow-hidden font-normal text-center mr-2 rounded-full;
+
+  img {
+    @apply h-7 w-7 min-w-7 float-left;
   }
 }
