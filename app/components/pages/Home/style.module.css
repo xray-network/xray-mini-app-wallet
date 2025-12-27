@@ -36,17 +36,14 @@
 }
 
 .address {
-  &:not(:global(.ant-input-group-wrapper-status-error)) {
-    :global(.ant-input-group-addon) {
-      @apply border-gray-300 text-black;
-      @apply dark:border-gray-700 dark:text-white;
-    }
-  }
-
   :global(.ant-input-group-addon) {
-    @apply bg-gray-50;
-    @apply dark:bg-gray-900;
+    @apply text-white! bg-green-500 font-bold;
+    @apply dark:text-black!;
   }
+}
+
+.address:global(.ant-input-group-wrapper-status-error) :global(.ant-input-group-addon) {
+  @apply border-red-500! bg-red-500!;
 }
 
 .addressIndex {
@@ -59,6 +56,11 @@
 
 .assetTickerAda {
   width: 60%;
+
+  :global(.ant-select .ant-select-selector) {
+    @apply bg-white!;
+    @apply dark:bg-black!;
+  }
 }
 
 .assetQuantityAda {

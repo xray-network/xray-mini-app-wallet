@@ -37,6 +37,18 @@
   --color-green-800: #07874d;
   --color-green-900: #046635;
   --color-green-950: #02421e;
+
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6e758d;
+  --color-gray-600: #55556d;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #1e2232;
+  --color-gray-950: #0e0e18;
 }
 
 [data-theme="dark"] {
