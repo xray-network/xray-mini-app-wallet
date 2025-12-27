@@ -123,8 +123,8 @@ export const lightTheme: Partial<ThemeConfig> = {
     Table: {
       borderColor: colors.gray100,
       rowHoverBg: colors.gray100,
-      headerSortHoverBg: colors.gray200,
-      headerSortActiveBg: colors.gray200,
+      headerSortHoverBg: colors.gray100,
+      headerSortActiveBg: colors.gray100,
       headerBg: "transparent",
       bodySortBg: "transparent",
       colorBgContainer: "transparent",
@@ -235,8 +235,8 @@ export const darkTheme: Partial<ThemeConfig> = {
     Table: {
       borderColor: colors.gray800,
       rowHoverBg: colors.gray900,
-      headerSortHoverBg: colors.gray800,
-      headerSortActiveBg: colors.gray800,
+      headerSortHoverBg: colors.gray900,
+      headerSortActiveBg: colors.gray900,
       headerBg: "transparent",
       bodySortBg: "transparent",
       colorBgContainer: "transparent",
