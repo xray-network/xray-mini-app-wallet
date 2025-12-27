@@ -26,6 +26,7 @@
   --color-blue-900: #030923;
   --color-blue-950: #010209;
 
+  --color-green: #15e4a3;
   --color-green-50: #f0fcfa;
   --color-green-100: #e6fcf9;
   --color-green-200: #bef7ec;
@@ -38,6 +39,7 @@
   --color-green-900: #046635;
   --color-green-950: #02421e;
 
+  --color-gray: #6e758d;
   --color-gray-50: #f9fafb;
   --color-gray-100: #f3f4f6;
   --color-gray-200: #e5e7eb;
@@ -52,6 +54,7 @@
 }
 
 [data-theme="dark"] {
+  --color-blue: #5e69ff;
   --color-blue-50: #f7fbff;
   --color-blue-100: #f0f7ff;
   --color-blue-200: #d6e7ff;
