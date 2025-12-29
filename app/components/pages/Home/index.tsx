@@ -174,7 +174,7 @@ export const HomePage = () => {
               </div>
             </div>
             <Form onFinish={() => processForm("send")} form={form} layout="vertical" requiredMark={false} preserve>
-              <div className="p-6 bg-gray-100 dark:bg-gray-950 rounded-2xl mb-10">
+              <div className="p-6 bg-gray-100 dark:bg-gray-950 rounded-2xl mb-10 -mx-6 sm:-mx-0">
                 <Form.List name="outputs" initialValue={[{}]}>
                   {(addressFields, { add: addressAdd, remove: addressRemove }) => (
                     <>
