@@ -4,7 +4,7 @@ import QRCode from "react-qr-code"
 import { useAppStore } from "@/store/app"
 import { useWeb3Store } from "@/store/web3"
 import style from "./style.module.css"
-import { useMiniAppClientMessaging } from "xray-mini-app-sdk-react"
+import { miniAppClient } from "@xray-network/mini-app-sdk/client"
 import { debounce } from "lodash"
 import Informers from "@/components/informers"
 import AssetImage from "@/components/common/AssetImage"
@@ -36,8 +36,6 @@ export const HomePage = () => {
     },
     {} as { [key: string]: number }
   )
-
-  const { sendMessage } = useMiniAppClientMessaging(() => {})
 
   const [form] = Form.useForm()
   const [sendAll, setSendAll] = useState(false)
@@ -109,10 +107,8 @@ export const HomePage = () => {
           setError("")
 
           if (action === "send") {
-            // setLoading(true) // TODO: create ping-pong submitting state in xray-mini-app-sdk-react
-            sendMessage("xray.client.submitTx", {
-              tx: txData.tx,
-            })
+            // setLoading(true) // TODO: surface the SDK submit response in the UI
+            void miniAppClient.submitTx(txData.tx)
           }
         } catch (error: any) {
           try {
