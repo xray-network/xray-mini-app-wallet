@@ -3,7 +3,7 @@ import { Checkbox, Form, Input, InputNumber, Button, Select, Empty, Alert, Space
 import QRCode from "react-qr-code"
 import { useAccountState } from "@xray-network/xray-js/mini-app-bridge/react"
 import { useCardano } from "@/integrations/xray-js/CardanoProvider"
-import { useEffectiveNetwork } from "@/integrations/xray-mini-app-sdk/useEffectiveSettings"
+import { useEffectiveNetwork } from "@/integrations/xray-js/useEffectiveSettings"
 import style from "./style.module.css"
 import { miniAppClient } from "@xray-network/xray-js/mini-app-bridge/client"
 import { debounce } from "lodash"

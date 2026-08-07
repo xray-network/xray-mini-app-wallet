@@ -1,4 +1,4 @@
-import { useEffectiveNetwork } from "@/integrations/xray-mini-app-sdk/useEffectiveSettings"
+import { useEffectiveNetwork } from "@/integrations/xray-js/useEffectiveSettings"
 
 const AssetImage = ({
   assetId,

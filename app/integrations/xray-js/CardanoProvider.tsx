@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
 import type { Cardano, addresses } from "@xray-network/xray-js/cardano"
 import type { CardanoTypes } from "@/types"
-import { useEffectiveNetwork } from "@/integrations/xray-mini-app-sdk/useEffectiveSettings"
+import { useEffectiveNetwork } from "@/integrations/xray-js/useEffectiveSettings"
 
 type CardanoState =
   | { status: "loading"; network: CardanoTypes.NetworkName; client: null; addresses: null; error: null }
