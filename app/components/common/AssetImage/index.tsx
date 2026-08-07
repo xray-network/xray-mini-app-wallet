@@ -1,4 +1,4 @@
-import { useAppStore } from "@/store/app"
+import { useEffectiveNetwork } from "@/integrations/xray-mini-app-sdk/useEffectiveSettings"
 
 const AssetImage = ({
   assetId,
@@ -7,7 +7,7 @@ const AssetImage = ({
   assetId: string
   size?: "original" | "64" | "128" | "256" | "512" | "1024" | "2048"
 }) => {
-  const network = useAppStore((state) => state.network)
+  const network = useEffectiveNetwork()
   const url =
     assetId === "ada"
       ? `/resources/icons/cardano.png`

@@ -1,16 +1,17 @@
 import { useCallback, useState, memo } from "react"
 import { Checkbox, Form, Input, InputNumber, Button, Select, Empty, Alert, Space, Col, Row } from "antd"
 import QRCode from "react-qr-code"
-import { useAppStore } from "@/store/app"
-import { useWeb3Store } from "@/store/web3"
+import { useAccountState } from "@xray-network/xray-js/mini-app-bridge/react"
+import { useCardano } from "@/integrations/xray-js/CardanoProvider"
+import { useEffectiveNetwork } from "@/integrations/xray-mini-app-sdk/useEffectiveSettings"
 import style from "./style.module.css"
-import { miniAppClient } from "@xray-network/mini-app-sdk/client"
+import { miniAppClient } from "@xray-network/xray-js/mini-app-bridge/client"
 import { debounce } from "lodash"
 import Informers from "@/components/informers"
 import AssetImage from "@/components/common/AssetImage"
-import * as UtilsTxCw3 from "@/utils/txCw3"
+import * as TransactionUtils from "@/integrations/xray-js/transaction"
 import * as Utils from "@/utils"
-import { message, notification } from "@/utils/escapeAntd"
+import { message, notification } from "@/theme/EscapeAntd"
 import {
   ArrowRightIcon,
   TrashIcon,
@@ -21,10 +22,11 @@ import {
 } from "@heroicons/react/24/outline"
 
 export const HomePage = () => {
-  const web3 = useWeb3Store((state) => state.web3)
-  const web3utils = useWeb3Store((state) => state.utils)
-  const network = useAppStore((state) => state.network)
-  const accountState = useAppStore((state) => state.accountState)
+  const cardano = useCardano()
+  const web3 = cardano.status === "ready" ? cardano.client : null
+  const addresses = cardano.status === "ready" ? cardano.addresses : null
+  const network = useEffectiveNetwork()
+  const { accountState } = useAccountState()
 
   const accountAssets = accountState?.state?.balance?.assets || []
   const accountUtxos = accountState?.state?.utxos || []
@@ -41,8 +43,8 @@ export const HomePage = () => {
   const [sendAll, setSendAll] = useState(false)
   const [selectedOption, setSelectedOption] = useState<{ [key: string]: string }>({})
   const [validated, setValidated] = useState(true)
-  const [transactionData, setTransactionData] = useState<ReturnType<typeof UtilsTxCw3.parseJsonTx>>()
-  const [flattenedOutputs, setFlattenedOutputs] = useState<ReturnType<typeof UtilsTxCw3.flattenOutputs>>()
+  const [transactionFee, setTransactionFee] = useState(0n)
+  const [flattenedOutputs, setFlattenedOutputs] = useState<ReturnType<typeof TransactionUtils.flattenOutputs>>()
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -51,7 +53,7 @@ export const HomePage = () => {
     form.setFieldsValue({ outputs: [{}] })
     setSelectedOption({})
     setValidated(true)
-    setTransactionData(undefined)
+    setTransactionFee(0n)
     setFlattenedOutputs(undefined)
     setError("")
   }
@@ -61,7 +63,7 @@ export const HomePage = () => {
     setTimeout(async () => {
       if (!!form.getFieldsError().filter(({ errors }) => errors.length).length) {
         setValidated(false)
-        setTransactionData(undefined)
+        setTransactionFee(0n)
         setFlattenedOutputs(undefined)
         return
       } else {
@@ -69,46 +71,28 @@ export const HomePage = () => {
       }
 
       const values = form.getFieldsValue()
-      const outputs = sendAll ? accountUtxos : UtilsTxCw3.formValuesToOutputs(values.outputs)
+      const outputs = sendAll ? accountUtxos : TransactionUtils.formValuesToOutputs(values.outputs)
 
       if (outputs.length && accountState && web3) {
         try {
-          const tx = sendAll
-            ? await web3.createTx().addInputs(accountUtxos).setChangeAddress(outputs[0].address).applyAndBuild()
-            : await web3
-                .createTx()
-                .addInputs(accountUtxos)
-                .addOutputs(outputs)
+          const txData = sendAll
+            ? await web3.transactions.create().spend(accountUtxos).setChangeAddress(outputs[0].address).build()
+            : await web3.transactions
+                .create()
+                .spend(accountUtxos)
+                .payTo(outputs)
                 .setChangeAddress(accountState.paymentAddress)
-                .applyAndBuild()
+                .build()
 
-          const txData = await tx.applyAndToJson()
-          const transactionData = UtilsTxCw3.parseJsonTx(txData.json)
-
-          // Get decimals from account utxos
-          accountUtxos.forEach((utxo) => {
-            transactionData.outputs.forEach((output) => {
-              output.assets.forEach((asset) => {
-                const utxoAsset = utxo.assets.find(
-                  (a) => a.policyId === asset.policyId && a.assetName === asset.assetName
-                )
-                if (utxoAsset) {
-                  asset.decimals = utxoAsset.decimals
-                }
-              })
-            })
-          })
-
-          // Flatten outputs
-          const flattenedOutputs = UtilsTxCw3.flattenOutputs(sendAll ? transactionData.outputs : outputs)
-          setTransactionData(transactionData)
+          const flattenedOutputs = TransactionUtils.flattenOutputs(outputs)
+          setTransactionFee(TransactionUtils.transactionFee(txData.json))
           setFlattenedOutputs(flattenedOutputs)
 
           setError("")
 
           if (action === "send") {
             // setLoading(true) // TODO: surface the SDK submit response in the UI
-            void miniAppClient.submitTx(txData.tx)
+            void miniAppClient.submitTx(txData.cbor)
           }
         } catch (error: any) {
           try {
@@ -202,7 +186,7 @@ export const HomePage = () => {
                                 rules={[
                                   () => ({
                                     validator(_, value) {
-                                      if (value && web3utils?.address.validateAddress(value)) {
+                                      if (value && addresses?.validateAddress(value)) {
                                         return Promise.resolve()
                                       }
                                       return Promise.reject(new Error("Address is wrong"))
@@ -464,7 +448,7 @@ export const HomePage = () => {
                               title: "+ Tx Fee",
                               children: (
                                 <span className="font-size-16">
-                                  <Informers.Ada value={transactionData?.fee || "0"} sameSize />
+                                  <Informers.Ada value={transactionFee} sameSize />
                                 </span>
                               ),
                             },
