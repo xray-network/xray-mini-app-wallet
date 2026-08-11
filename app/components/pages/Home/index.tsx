@@ -126,7 +126,7 @@ export const HomePage = () => {
   }
 
   return (
-    <div className="max-w-256 mx-auto pt-5">
+    <div className="max-w-4xl mx-auto pt-5">
       <Row gutter={48}>
         <Col xs={24} sm={24} md={18}>
           <div>
