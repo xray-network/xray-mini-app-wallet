@@ -32,7 +32,7 @@
 }
 
 .assetGroup :global(.ant-form-item) {
-  @apply -me-[1px]!;
+  @apply -me-px!;
 }
 
 .address {
