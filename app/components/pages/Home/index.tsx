@@ -1,11 +1,11 @@
 import { useCallback, useState, memo } from "react"
 import { Checkbox, Form, Input, InputNumber, Button, Select, Empty, Alert, Space, Col, Row } from "antd"
 import QRCode from "react-qr-code"
-import { useAccountState } from "@xray-network/xray-js/mini-app-bridge/react"
+import { useAccountState } from "@xray-network/xray-js/mini-app-bridge/cardano/react"
 import { useCardano } from "@/integrations/xray-js/CardanoProvider"
 import { useEffectiveNetwork } from "@/integrations/xray-js/useEffectiveSettings"
 import style from "./style.module.css"
-import { miniAppClient } from "@xray-network/xray-js/mini-app-bridge/client"
+import * as cardanoClient from "@xray-network/xray-js/mini-app-bridge/cardano/client"
 import { debounce } from "lodash"
 import Informers from "@/components/informers"
 import AssetImage from "@/components/common/AssetImage"
@@ -92,7 +92,7 @@ export const HomePage = () => {
 
           if (action === "send") {
             // setLoading(true) // TODO: surface the SDK submit response in the UI
-            void miniAppClient.submitTx(txData.cbor)
+            void cardanoClient.submitTx(txData.cbor)
           }
         } catch (error: any) {
           try {
