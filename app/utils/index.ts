@@ -1,5 +1,6 @@
 import { SLOT_CONFIG_NETWORK, SLOT_EPOCH_DURATION, SLOT_STARTING_EPOCH } from "@/config"
-import { assets, cips, encoding } from "@xray-network/xray-js/cardano"
+import { utilities } from "@xray-network/xray-js/cardano"
+import * as cardanoLib from "@xray-network/xray-js/cardano/lib"
 import * as Types from "@/types"
 
 export const truncate = (string: string, start = 6, end = 6) => {
@@ -134,7 +135,7 @@ export const labelType = (label: number): string | undefined => {
 
 export function cip67FromLabel(label: string): number | undefined {
   try {
-    return cips.cip67.decode_asset_name_label(encoding.fromHex(label))
+    return cardanoLib.cips.cip67.decode_asset_name_label(utilities.encoding.fromHex(label))
   } catch {
     return undefined
   }
@@ -148,7 +149,7 @@ export const decodeAssetName = (assetName: string) => {
       const label = cip67FromLabel(labelHex)
       if (label) {
         return {
-          assetNameAsciiNoLabel: assets.assetNameToAssetNameAscii(assetNameHex || "") || "",
+          assetNameAsciiNoLabel: utilities.assets.assetNameToAssetNameAscii(assetNameHex || "") || "",
           label: labelHex,
           labelAscii: label,
           labelType: labelType(label),
@@ -158,7 +159,7 @@ export const decodeAssetName = (assetName: string) => {
       }
     }
     const decoded = decode(assetName)
-    const assetNameAscii = assets.assetNameToAssetNameAscii(assetName || "") || ""
+    const assetNameAscii = utilities.assets.assetNameToAssetNameAscii(assetName || "") || ""
     const assetNameAsciiNoLabel = decoded?.assetNameAsciiNoLabel || assetNameAscii
     const format = /^([/\\\[\]*<>(),.!?@+=%&$#^'"|a-zA-Z0-9 _-]+)$/
     const assetNameFinal = format.test(assetNameAsciiNoLabel) ? assetNameAsciiNoLabel : assetName

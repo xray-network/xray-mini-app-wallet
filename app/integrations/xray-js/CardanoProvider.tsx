@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
-import type { Cardano, addresses } from "@xray-network/xray-js/cardano"
+import type { Cardano, utilities } from "@xray-network/xray-js/cardano"
 import type { CardanoTypes } from "@/types"
 import { useEffectiveNetwork } from "@/integrations/xray-js/useEffectiveSettings"
 
@@ -9,7 +9,7 @@ type CardanoState =
       status: "ready"
       network: CardanoTypes.NetworkName
       client: Cardano
-      addresses: typeof addresses
+      addresses: typeof utilities.addresses
       error: null
     }
   | { status: "error"; network: CardanoTypes.NetworkName; client: null; addresses: null; error: Error }
@@ -31,9 +31,15 @@ export function CardanoProvider({ children }: { children: React.ReactNode }) {
     setState({ status: "loading", network, client: null, addresses: null, error: null })
 
     void import("@xray-network/xray-js/cardano")
-      .then(({ createCardano, addresses }) => {
+      .then(({ createCardano, utilities }) => {
         if (!current) return
-        setState({ status: "ready", network, client: createCardano({ network }), addresses, error: null })
+        setState({
+          status: "ready",
+          network,
+          client: createCardano({ network }),
+          addresses: utilities.addresses,
+          error: null,
+        })
       })
       .catch((cause: unknown) => {
         if (!current) return
