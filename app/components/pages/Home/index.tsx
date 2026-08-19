@@ -1,8 +1,8 @@
 import { useCallback, useState, memo } from "react"
 import { Checkbox, Form, Input, InputNumber, Button, Select, Empty, Alert, Space, Col, Row } from "antd"
 import QRCode from "react-qr-code"
-import { client } from "@xray-network/xray-js/mini-app-bridge"
-import { cardano as cardanoReact } from "@xray-network/xray-js/mini-app-bridge/react"
+import { clientCardanoV1 } from "@xray-network/xray-js/mini-app-bridge"
+import { cardanoV1, platformV1 } from "@xray-network/xray-js/mini-app-bridge/react"
 import { useCardano } from "@/integrations/xray-js/CardanoProvider"
 import { useEffectiveNetwork } from "@/integrations/xray-js/useEffectiveSettings"
 import style from "./style.module.css"
@@ -26,7 +26,16 @@ export const HomePage = () => {
   const web3 = cardano.status === "ready" ? cardano.client : null
   const addresses = cardano.status === "ready" ? cardano.addresses : null
   const network = useEffectiveNetwork()
-  const { accountState } = cardanoReact.bridge.useAccountState()
+  const accountState = cardanoV1.useAccountState().data
+  const status = platformV1.useStatus()
+  const standalone = typeof window !== "undefined" && window.parent === window
+  const unavailableMessage = status.data?.account
+    ? "Cardano account data is not yet available."
+    : status.data
+      ? "Select a Cardano account in XRAY App before creating a transaction."
+    : standalone
+      ? "Open this mini app inside XRAY App before creating a transaction."
+      : "XRAY App did not respond to the platform status request."
 
   const accountAssets = accountState?.state?.balance?.assets || []
   const accountUtxos = accountState?.state?.utxos || []
@@ -92,7 +101,7 @@ export const HomePage = () => {
 
           if (action === "send") {
             // setLoading(true) // TODO: surface the SDK submit response in the UI
-            void client.cardano.bridge.submitTx(txData.cbor)
+            void clientCardanoV1.submitTx(txData.cbor)
           }
         } catch (error: any) {
           try {
@@ -127,6 +136,7 @@ export const HomePage = () => {
 
   return (
     <div className="max-w-4xl mx-auto pt-5">
+      {!accountState && <Alert className="mb-5" type="info" showIcon message={unavailableMessage} />}
       <Row gutter={48}>
         <Col xs={24} sm={24} md={18}>
           <div>
