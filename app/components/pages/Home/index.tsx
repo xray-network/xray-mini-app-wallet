@@ -1,17 +1,16 @@
-import { useCallback, useState, memo } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react"
 import { Checkbox, Form, Input, InputNumber, Button, Select, Empty, Alert, Space, Col, Row } from "antd"
 import QRCode from "react-qr-code"
 import { clientCardanoV1 } from "@xray-network/xray-js/mini-app-bridge"
 import { cardanoV1, platformV1 } from "@xray-network/xray-js/mini-app-bridge/react"
 import { useCardano } from "@/integrations/xray-js/CardanoProvider"
-import { useEffectiveNetwork } from "@/integrations/xray-js/useEffectiveSettings"
 import style from "./style.module.css"
 import { debounce } from "lodash"
 import Informers from "@/components/informers"
 import AssetImage from "@/components/common/AssetImage"
 import * as TransactionUtils from "@/integrations/xray-js/transaction"
 import * as Utils from "@/utils"
-import { message, notification } from "@/theme/EscapeAntd"
+import { notification } from "@/theme/EscapeAntd"
 import {
   ArrowRightIcon,
   TrashIcon,
@@ -21,11 +20,19 @@ import {
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline"
 
+type ProcessAction = "preview" | "send"
+
+const transactionErrorMessage = (cause: unknown) => {
+  const detail = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : ""
+  if (detail.includes("UTxO Balance Insufficient")) return "Transaction error: Insufficient funds"
+  if (/less tha?n the minimum UTXO value/i.test(detail)) return `Requirement to send assets: ${detail}`
+  return detail ? `Transaction error: ${detail}` : "Transaction error: Invalid transaction or insufficient funds"
+}
+
 export const HomePage = () => {
   const cardano = useCardano()
   const web3 = cardano.status === "ready" ? cardano.client : null
   const addresses = cardano.status === "ready" ? cardano.addresses : null
-  const network = useEffectiveNetwork()
   const accountState = cardanoV1.useAccountState().data
   const status = platformV1.useStatus()
   const standalone = typeof window !== "undefined" && window.parent === window
@@ -33,106 +40,155 @@ export const HomePage = () => {
     ? "Cardano account data is not yet available."
     : status.data
       ? "Select a Cardano account in XRAY App before creating a transaction."
-    : standalone
-      ? "Open this mini app inside XRAY App before creating a transaction."
-      : "XRAY App did not respond to the platform status request."
+      : standalone
+        ? "Open this mini app inside XRAY App before creating a transaction."
+        : "XRAY App did not respond to the platform status request."
 
-  const accountAssets = accountState?.state?.balance?.assets || []
-  const accountUtxos = accountState?.state?.utxos || []
+  const accountAssets = accountState?.state?.balance?.assets ?? []
+  const accountUtxos = accountState?.state?.utxos ?? []
 
-  const decimalsList = accountState?.state?.balance.assets.reduce(
-    (acc, asset) => {
-      acc[asset.policyId + asset.assetName] = asset.decimals || 0
-      return acc
-    },
-    {} as { [key: string]: number }
+  const decimalsList = useMemo(
+    () =>
+      accountAssets.reduce(
+        (acc, asset) => {
+          acc[asset.policyId + asset.assetName] = asset.decimals || 0
+          return acc
+        },
+        {} as { [key: string]: number }
+      ),
+    [accountAssets]
   )
 
   const [form] = Form.useForm()
   const [sendAll, setSendAll] = useState(false)
   const [selectedOption, setSelectedOption] = useState<{ [key: string]: string }>({})
-  const [validated, setValidated] = useState(true)
+  const [validated, setValidated] = useState(false)
   const [transactionFee, setTransactionFee] = useState(0n)
   const [flattenedOutputs, setFlattenedOutputs] = useState<ReturnType<typeof TransactionUtils.flattenOutputs>>()
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const requestIdRef = useRef(0)
+  const submissionInFlightRef = useRef(false)
 
-  const resetForm = () => {
+  const clearPreview = useCallback((nextError = "") => {
+    setValidated(false)
+    setTransactionFee(0n)
+    setFlattenedOutputs(undefined)
+    setError(nextError)
+  }, [])
+
+  const processForm = useCallback(
+    async (action: ProcessAction, requestId: number) => {
+      if (requestId !== requestIdRef.current) return
+
+      let values: { outputs?: unknown[] }
+      try {
+        values = await form.validateFields()
+      } catch {
+        if (requestId === requestIdRef.current) clearPreview()
+        return
+      }
+      if (requestId !== requestIdRef.current) return
+
+      const outputs = TransactionUtils.formValuesToOutputs(values.outputs)
+      const recipient = outputs[0]?.address
+      if (!accountState || !web3 || !recipient || !accountUtxos.length) {
+        clearPreview(accountUtxos.length ? "" : "Transaction error: No spendable UTxOs available")
+        return
+      }
+
+      let txData: Awaited<ReturnType<typeof TransactionUtils.buildSendAllTransaction>>
+      try {
+        txData = sendAll
+          ? await TransactionUtils.buildSendAllTransaction(web3, accountUtxos, recipient)
+          : await web3.transactions
+              .create()
+              .spend(accountUtxos)
+              .payTo(outputs)
+              .setChangeAddress(accountState.paymentAddress)
+              .build()
+        const inspection = web3.transactions.inspect(txData.cbor)
+        const summary = sendAll
+          ? TransactionUtils.flattenTransactionOutputs(inspection.outputs, recipient, decimalsList)
+          : TransactionUtils.flattenOutputs(outputs)
+
+        if (requestId !== requestIdRef.current) return
+        setTransactionFee(inspection.fee)
+        setFlattenedOutputs(summary)
+        setValidated(true)
+        setError("")
+      } catch (cause: unknown) {
+        if (requestId !== requestIdRef.current) return
+        const nextError = transactionErrorMessage(cause)
+        clearPreview(nextError)
+        if (action === "send") {
+          notification.error({ message: "Transaction could not be built", description: nextError })
+        }
+        return
+      }
+
+      if (action !== "send") return
+      try {
+        const response = await clientCardanoV1.signAndSubmitTx(txData.cbor)
+        const result = response?.payload
+        if (!result) throw new Error("XRAY App did not return a submission result")
+        if (result.success) {
+          notification.success({ message: "Transaction submitted", description: result.hash })
+          return
+        }
+        setError(result.error)
+        notification.error({ message: "Transaction was not submitted", description: result.error })
+      } catch (cause: unknown) {
+        const nextError = transactionErrorMessage(cause)
+        setError(nextError)
+        notification.error({ message: "Transaction was not submitted", description: nextError })
+      }
+    },
+    [accountState, accountUtxos, clearPreview, decimalsList, form, sendAll, web3]
+  )
+
+  const debouncedPreview = useMemo(
+    () =>
+      debounce((requestId: number) => {
+        void processForm("preview", requestId)
+      }, 500),
+    [processForm]
+  )
+
+  useEffect(
+    () => () => {
+      requestIdRef.current += 1
+      debouncedPreview.cancel()
+    },
+    [debouncedPreview]
+  )
+
+  const queuePreview = useCallback(() => {
+    const requestId = ++requestIdRef.current
+    clearPreview()
+    debouncedPreview(requestId)
+  }, [clearPreview, debouncedPreview])
+
+  const resetForm = useCallback(() => {
+    requestIdRef.current += 1
+    debouncedPreview.cancel()
     form.resetFields()
     form.setFieldsValue({ outputs: [{}] })
     setSelectedOption({})
-    setValidated(true)
-    setTransactionFee(0n)
-    setFlattenedOutputs(undefined)
-    setError("")
-  }
+    clearPreview()
+  }, [clearPreview, debouncedPreview, form])
 
-  const processForm = (action?: string) => {
-    form.validateFields()
-    setTimeout(async () => {
-      if (!!form.getFieldsError().filter(({ errors }) => errors.length).length) {
-        setValidated(false)
-        setTransactionFee(0n)
-        setFlattenedOutputs(undefined)
-        return
-      } else {
-        setValidated(true)
-      }
-
-      const values = form.getFieldsValue()
-      const outputs = sendAll ? accountUtxos : TransactionUtils.formValuesToOutputs(values.outputs)
-
-      if (outputs.length && accountState && web3) {
-        try {
-          const txData = sendAll
-            ? await web3.transactions.create().spend(accountUtxos).setChangeAddress(outputs[0].address).build()
-            : await web3.transactions
-                .create()
-                .spend(accountUtxos)
-                .payTo(outputs)
-                .setChangeAddress(accountState.paymentAddress)
-                .build()
-
-          const flattenedOutputs = TransactionUtils.flattenOutputs(outputs)
-          setTransactionFee(TransactionUtils.transactionFee(txData.json))
-          setFlattenedOutputs(flattenedOutputs)
-
-          setError("")
-
-          if (action === "send") {
-            // setLoading(true) // TODO: surface the SDK submit response in the UI
-            void clientCardanoV1.submitTx(txData.cbor)
-          }
-        } catch (error: any) {
-          try {
-            if (typeof error === "object") {
-              if (error.message) {
-                if (error.message.includes("less tan the minimum UTXO value")) {
-                  return setError(
-                    "Requirement to send assets: " +
-                      error.message
-                        .replace(/\'/g, "")
-                        .split(/(\d+)/)
-                        .map((item: string) => {
-                          const number = parseInt(item, 10)
-                          return Number.isNaN(number) ? item : `${(number / 1000000).toFixed(6)} ADA`
-                        })
-                        .join(" ")
-                  )
-                }
-                if (error.message.includes("UTxO Balance Insufficient")) {
-                  return setError("Transaction error: Insufficient funds")
-                }
-              }
-            }
-            setError("Transaction error: Invalid transaction or insufficient funds")
-          } catch (error: any) {
-            setError("Transaction error: Invalid transaction or insufficient funds")
-          }
-        }
-      }
+  const submitForm = useCallback(() => {
+    if (submissionInFlightRef.current) return
+    submissionInFlightRef.current = true
+    debouncedPreview.cancel()
+    const requestId = ++requestIdRef.current
+    setLoading(true)
+    void processForm("send", requestId).finally(() => {
+      submissionInFlightRef.current = false
+      setLoading(false)
     })
-  }
+  }, [debouncedPreview, processForm])
 
   return (
     <div className="max-w-4xl mx-auto pt-5">
@@ -146,6 +202,7 @@ export const HomePage = () => {
                 <span className="ms-3">
                   <Checkbox
                     checked={sendAll}
+                    disabled={loading}
                     onChange={(e) => {
                       resetForm()
                       setSendAll(e.target.checked)
@@ -156,14 +213,17 @@ export const HomePage = () => {
                 </span>
                 <span
                   className="shared-link cursor-pointer ms-3 inline-flex items-center justify-center"
-                  onClick={resetForm}
+                  aria-disabled={loading}
+                  onClick={() => {
+                    if (!loading) resetForm()
+                  }}
                 >
                   <XMarkIcon className="size-5 me-1" strokeWidth={2.5} />
                   Reset
                 </span>
               </div>
             </div>
-            <Form onFinish={() => processForm("send")} form={form} layout="vertical" requiredMark={false} preserve>
+            <Form onFinish={submitForm} form={form} layout="vertical" requiredMark={false} preserve disabled={loading}>
               <div className="p-6 bg-gray-100 dark:bg-gray-950 rounded-2xl mb-10 -mx-6 sm:mx-0">
                 <Form.List name="outputs" initialValue={[{}]}>
                   {(addressFields, { add: addressAdd, remove: addressRemove }) => (
@@ -180,7 +240,7 @@ export const HomePage = () => {
                                   <a
                                     onClick={() => {
                                       addressRemove(addressField.name)
-                                      processForm()
+                                      queuePreview()
                                     }}
                                     className="ms-auto flex items-center shared-link cursor-pointer"
                                   >
@@ -220,7 +280,7 @@ export const HomePage = () => {
                                     </span>
                                   }
                                   className={style.address}
-                                  onChange={debounce(processForm, 500) as any}
+                                  onChange={queuePreview}
                                 />
                               </Form.Item>
                             </Form.Item>
@@ -254,7 +314,7 @@ export const HomePage = () => {
                                     autoComplete="off"
                                     decimalSeparator="."
                                     style={{ width: "100%" }}
-                                    onChange={debounce(processForm, 500) as any}
+                                    onChange={queuePreview}
                                   />
                                 </Form.Item>
                               </Space.Compact>
@@ -280,21 +340,16 @@ export const HomePage = () => {
                                             size="large"
                                             placeholder="Select Asset"
                                             onChange={(value) => {
-                                              setTimeout(() => {
-                                                setSelectedOption({
-                                                  ...selectedOption,
-                                                  [formId]: value,
-                                                })
-                                                form.setFieldValue(
-                                                  ["outputs", addressField.name, "assets", assetField.name, "quantity"],
-                                                  undefined
-                                                )
-                                                form.setFieldValue(
-                                                  ["outputs", addressField.name, "assets", assetField.name, "decimals"],
-                                                  decimalsList?.[value] || 0
-                                                )
-                                                processForm()
-                                              })
+                                              setSelectedOption((current) => ({ ...current, [formId]: value }))
+                                              form.setFieldValue(
+                                                ["outputs", addressField.name, "assets", assetField.name, "quantity"],
+                                                undefined
+                                              )
+                                              form.setFieldValue(
+                                                ["outputs", addressField.name, "assets", assetField.name, "decimals"],
+                                                decimalsList[value] || 0
+                                              )
+                                              queuePreview()
                                             }}
                                             onClear={() => {}}
                                             className="w-100p"
@@ -352,7 +407,7 @@ export const HomePage = () => {
                                             size="large"
                                             placeholder={placeholder}
                                             autoComplete="off"
-                                            onChange={debounce(processForm, 500) as any}
+                                            onChange={queuePreview}
                                             style={{ width: "100%" }}
                                           />
                                         </Form.Item>
@@ -369,12 +424,13 @@ export const HomePage = () => {
                                             className="px-0!"
                                             size="large"
                                             onClick={() => {
-                                              delete selectedOption[formId]
-                                              setSelectedOption(selectedOption)
-                                              assetRemove(assetField.name)
-                                              setTimeout(() => {
-                                                processForm()
+                                              setSelectedOption((current) => {
+                                                const next = { ...current }
+                                                delete next[formId]
+                                                return next
                                               })
+                                              assetRemove(assetField.name)
+                                              queuePreview()
                                             }}
                                           >
                                             <TrashIcon className="size-4 me-0.5" strokeWidth={2} />
@@ -385,12 +441,27 @@ export const HomePage = () => {
                                   })}
                                   {!sendAll && (
                                     <div>
-                                      <Button size="large" onClick={() => assetAdd()} shape="round" className="me-2">
+                                      <Button
+                                        size="large"
+                                        onClick={() => {
+                                          assetAdd()
+                                          queuePreview()
+                                        }}
+                                        shape="round"
+                                        className="me-2"
+                                      >
                                         <PlusCircleIcon className="size-5" strokeWidth={2.5} />
                                         <strong>Add Asset</strong>
                                       </Button>
                                       {index + 1 === addressFields.length && (
-                                        <Button size="large" onClick={() => addressAdd()} shape="round">
+                                        <Button
+                                          size="large"
+                                          onClick={() => {
+                                            addressAdd()
+                                            queuePreview()
+                                          }}
+                                          shape="round"
+                                        >
                                           <PlusCircleIcon className="size-5" strokeWidth={2.5} />
                                           <strong>Add Address</strong>
                                         </Button>
@@ -420,7 +491,7 @@ export const HomePage = () => {
                           compact
                           items={[
                             {
-                              title: "Send Subtotal",
+                              title: sendAll ? "Recipient Receives" : "Send Subtotal",
                               children: (
                                 <span className="font-size-16">
                                   <Informers.Ada value={flattenedOutputs?.value || "0"} sameSize />
@@ -455,7 +526,7 @@ export const HomePage = () => {
                           compact
                           items={[
                             {
-                              title: "+ Tx Fee",
+                              title: "Tx Fee",
                               children: (
                                 <span className="font-size-16">
                                   <Informers.Ada value={transactionFee} sameSize />
@@ -475,7 +546,7 @@ export const HomePage = () => {
                   size="large"
                   type="primary"
                   shape="round"
-                  disabled={!accountState || !!error || !validated}
+                  disabled={!accountState || !validated || loading}
                   className="mt-5"
                   loading={loading}
                   block
@@ -494,7 +565,7 @@ export const HomePage = () => {
                 <div className="mb-5">
                   <strong>From Address</strong>
                 </div>
-                <div className="mb-5">
+                {/* <div className="mb-5">
                   <div className="h-25 w-25 bg-gray-950">
                     <QRCode
                       size={256}
@@ -503,7 +574,7 @@ export const HomePage = () => {
                       viewBox={`0 0 256 256`}
                     />
                   </div>
-                </div>
+                </div> */}
                 <div className="mb-3">
                   <Informers.Explorer value={accountState?.paymentAddress} type="paymentAddress" />
                 </div>

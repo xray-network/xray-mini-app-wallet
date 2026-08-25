@@ -1,4 +1,15 @@
-import type { CardanoTypes } from "@/types"
+import type { Cardano, types as CardanoTypes } from "@xray-network/xray-js/cardano"
+
+export type FlattenedOutputs = {
+  value: bigint
+  assets: { policyId: string; assetName: string; quantity: bigint; decimals: number }[]
+}
+
+type InspectedOutput = {
+  address: string
+  lovelace: bigint
+  assets: readonly { policyId: string; assetName: string; quantity: bigint }[]
+}
 
 export const formValuesToOutputs = (formValues: any = []): CardanoTypes.Output[] => {
   const outputs: CardanoTypes.Output[] = []
@@ -37,12 +48,7 @@ export const formValuesToOutputs = (formValues: any = []): CardanoTypes.Output[]
   return outputs
 }
 
-export const flattenOutputs = (
-  outputs: CardanoTypes.Output[]
-): {
-  value: bigint
-  assets: { policyId: string; assetName: string; quantity: bigint; decimals: number }[]
-} => {
+export const flattenOutputs = (outputs: readonly CardanoTypes.Output[]): FlattenedOutputs => {
   let totalValue = 0n
   const assetMap = new Map<string, { policyId: string; assetName: string; quantity: bigint; decimals: number }>()
 
@@ -59,13 +65,26 @@ export const flattenOutputs = (
   return { value: totalValue, assets: Array.from(assetMap.values()) }
 }
 
-export const transactionFee = (json: unknown): bigint => {
-  if (!json || typeof json !== "object" || !("body" in json)) return 0n
-  const body = json.body
-  if (!body || typeof body !== "object" || !("fee" in body)) return 0n
-  const fee = body.fee
-  return typeof fee === "bigint" ? fee : BigInt(typeof fee === "number" || typeof fee === "string" ? fee : 0)
-}
+export const flattenTransactionOutputs = (
+  outputs: readonly InspectedOutput[],
+  recipient: string,
+  decimalsByAssetId: Readonly<Record<string, number>> = {}
+): FlattenedOutputs =>
+  flattenOutputs(
+    outputs
+      .filter(({ address }) => address === recipient)
+      .map(({ address, lovelace, assets }) => ({
+        address,
+        value: lovelace,
+        assets: assets.map((asset) => ({
+          ...asset,
+          decimals: decimalsByAssetId[asset.policyId + asset.assetName] ?? 0,
+        })),
+      }))
+  )
+
+export const buildSendAllTransaction = (cardano: Cardano, utxos: CardanoTypes.Utxo[], recipient: string) =>
+  cardano.transactions.create().spend(utxos).setChangeAddress(recipient).build()
 
 export const convertQuantity = (value: string | number | bigint, decimals: number): bigint => {
   if (!value) return 0n
