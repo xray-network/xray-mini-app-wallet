@@ -582,9 +582,6 @@ export const HomePage = () => {
                   <div className="text-xl">
                     <Informers.Ada value={accountState?.state?.balance.value || 0n} />
                   </div>
-                  {!!accountState?.state?.balance.assets.length && (
-                    <div>+ {accountState.state.balance.assets.length} Assets</div>
-                  )}
                 </div>
               </Col>
               <Col xs={12} sm={12} md={24}>
