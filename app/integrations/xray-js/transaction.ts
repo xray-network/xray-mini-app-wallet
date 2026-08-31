@@ -1,4 +1,5 @@
-import type { Cardano, types as CardanoTypes } from "@xray-network/xray-js/cardano"
+import { utilities, type Cardano, type types as CardanoTypes } from "@xray-network/xray-js/cardano"
+import * as cardanoLib from "@xray-network/xray-js/cardano/lib"
 
 export type FlattenedOutputs = {
   value: bigint
@@ -9,6 +10,12 @@ type InspectedOutput = {
   address: string
   lovelace: bigint
   assets: readonly { policyId: string; assetName: string; quantity: bigint }[]
+}
+
+export type MinimumAdaViolation = {
+  outputIndex: number
+  value: bigint
+  minimum: bigint
 }
 
 export const formValuesToOutputs = (formValues: any = []): CardanoTypes.Output[] => {
@@ -82,6 +89,57 @@ export const flattenTransactionOutputs = (
         })),
       }))
   )
+
+export const minimumLovelaceForOutput = (
+  output: Pick<CardanoTypes.Output, "address" | "assets">,
+  coinsPerUtxoByte: bigint
+): bigint => {
+  const multiAsset = cardanoLib.chain.MultiAsset.new()
+
+  output.assets?.forEach(({ policyId, assetName, quantity }) => {
+    multiAsset.insert(
+      cardanoLib.crypto.ScriptHash.from_hex(policyId),
+      cardanoLib.chain.AssetName.from_raw_bytes(utilities.encoding.fromHex(assetName)),
+      quantity
+    )
+  })
+
+  return cardanoLib.chain.TransactionOutputBuilder.new()
+    .with_address(cardanoLib.chain.Address.from_bech32(output.address))
+    .next()
+    .with_asset_and_min_required_coin(multiAsset, coinsPerUtxoByte)
+    .build()
+    .output()
+    .amount()
+    .coin()
+}
+
+export const inspectMinimumAda = (outputs: readonly CardanoTypes.Output[], coinsPerUtxoByte: bigint) => {
+  const minimums = outputs.map((output) => minimumLovelaceForOutput(output, coinsPerUtxoByte))
+  const violations = outputs.flatMap((output, outputIndex): MinimumAdaViolation[] => {
+    const value = output.value ?? 0n
+    const minimum = minimums[outputIndex]
+    return value < minimum ? [{ outputIndex, value, minimum }] : []
+  })
+
+  return { minimums, violations }
+}
+
+export const formatLovelaceAsAda = (value: bigint): string => {
+  const sign = value < 0n ? "-" : ""
+  const absolute = value < 0n ? -value : value
+  return `${sign}${absolute / 1_000_000n}.${(absolute % 1_000_000n).toString().padStart(6, "0")}`
+}
+
+export const transactionErrorMessage = (cause: unknown): string => {
+  const detail = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : ""
+  if (detail.includes("UTxO Balance Insufficient")) return "Transaction error: Insufficient funds"
+
+  const minimumAda = /transaction output coin is below minimum ADA (\d+)/i.exec(detail)
+  if (minimumAda) return `Minimum ADA required: ${formatLovelaceAsAda(BigInt(minimumAda[1]))} ADA`
+
+  return detail ? `Transaction error: ${detail}` : "Transaction error: Invalid transaction or insufficient funds"
+}
 
 export const buildSendAllTransaction = (cardano: Cardano, utxos: CardanoTypes.Utxo[], recipient: string) =>
   cardano.transactions.create().spend(utxos).setChangeAddress(recipient).build()

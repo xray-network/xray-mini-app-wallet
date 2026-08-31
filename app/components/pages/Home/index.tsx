@@ -22,13 +22,6 @@ import {
 
 type ProcessAction = "preview" | "send"
 
-const transactionErrorMessage = (cause: unknown) => {
-  const detail = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : ""
-  if (detail.includes("UTxO Balance Insufficient")) return "Transaction error: Insufficient funds"
-  if (/less tha?n the minimum UTXO value/i.test(detail)) return `Requirement to send assets: ${detail}`
-  return detail ? `Transaction error: ${detail}` : "Transaction error: Invalid transaction or insufficient funds"
-}
-
 export const HomePage = () => {
   const cardano = useCardano()
   const web3 = cardano.status === "ready" ? cardano.client : null
@@ -65,6 +58,7 @@ export const HomePage = () => {
   const [validated, setValidated] = useState(false)
   const [transactionFee, setTransactionFee] = useState(0n)
   const [flattenedOutputs, setFlattenedOutputs] = useState<ReturnType<typeof TransactionUtils.flattenOutputs>>()
+  const [minimumAdaByOutput, setMinimumAdaByOutput] = useState<bigint[]>([])
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const requestIdRef = useRef(0)
@@ -99,6 +93,33 @@ export const HomePage = () => {
 
       let txData: Awaited<ReturnType<typeof TransactionUtils.buildSendAllTransaction>>
       try {
+        if (!sendAll) {
+          const { coinsPerUtxoByte } = await web3.getProtocolParameters()
+          if (requestId !== requestIdRef.current) return
+
+          const minimumAda = TransactionUtils.inspectMinimumAda(outputs, coinsPerUtxoByte)
+          setMinimumAdaByOutput(minimumAda.minimums)
+          form.setFields(
+            outputs.map((_, outputIndex) => {
+              const violation = minimumAda.violations.find((item) => item.outputIndex === outputIndex)
+              return {
+                name: ["outputs", outputIndex, "value"],
+                errors: violation ? [`Minimum ${TransactionUtils.formatLovelaceAsAda(violation.minimum)} ADA`] : [],
+              }
+            })
+          )
+
+          if (minimumAda.violations.length) {
+            const violation = minimumAda.violations[0]
+            const nextError = `Output ${violation.outputIndex + 1} requires at least ${TransactionUtils.formatLovelaceAsAda(violation.minimum)} ADA`
+            clearPreview(nextError)
+            if (action === "send") {
+              notification.error({ message: "Transaction could not be built", description: nextError })
+            }
+            return
+          }
+        }
+
         txData = sendAll
           ? await TransactionUtils.buildSendAllTransaction(web3, accountUtxos, recipient)
           : await web3.transactions
@@ -119,7 +140,7 @@ export const HomePage = () => {
         setError("")
       } catch (cause: unknown) {
         if (requestId !== requestIdRef.current) return
-        const nextError = transactionErrorMessage(cause)
+        const nextError = TransactionUtils.transactionErrorMessage(cause)
         clearPreview(nextError)
         if (action === "send") {
           notification.error({ message: "Transaction could not be built", description: nextError })
@@ -139,7 +160,7 @@ export const HomePage = () => {
         setError(result.error)
         notification.error({ message: "Transaction was not submitted", description: result.error })
       } catch (cause: unknown) {
-        const nextError = transactionErrorMessage(cause)
+        const nextError = TransactionUtils.transactionErrorMessage(cause)
         setError(nextError)
         notification.error({ message: "Transaction was not submitted", description: nextError })
       }
@@ -165,9 +186,14 @@ export const HomePage = () => {
 
   const queuePreview = useCallback(() => {
     const requestId = ++requestIdRef.current
+    const outputs = form.getFieldValue("outputs")
+    if (Array.isArray(outputs)) {
+      form.setFields(outputs.map((_, outputIndex) => ({ name: ["outputs", outputIndex, "value"], errors: [] })))
+    }
+    setMinimumAdaByOutput([])
     clearPreview()
     debouncedPreview(requestId)
-  }, [clearPreview, debouncedPreview])
+  }, [clearPreview, debouncedPreview, form])
 
   const resetForm = useCallback(() => {
     requestIdRef.current += 1
@@ -175,6 +201,7 @@ export const HomePage = () => {
     form.resetFields()
     form.setFieldsValue({ outputs: [{}] })
     setSelectedOption({})
+    setMinimumAdaByOutput([])
     clearPreview()
   }, [clearPreview, debouncedPreview, form])
 
@@ -192,7 +219,7 @@ export const HomePage = () => {
 
   return (
     <div className="max-w-4xl mx-auto pt-5">
-      {!accountState && <Alert className="mb-5" type="info" showIcon message={unavailableMessage} />}
+      {!accountState && <Alert className="mb-5!" type="info" showIcon message={unavailableMessage} />}
       <Row gutter={48}>
         <Col xs={24} sm={24} md={18}>
           <div>
@@ -303,11 +330,20 @@ export const HomePage = () => {
                                   name={[addressField.name, "value"]}
                                   initialValue=""
                                   rules={[{ required: true, message: "Required" }]}
+                                  // extra={
+                                  //   minimumAdaByOutput[index]
+                                  //     ? `Minimum ${TransactionUtils.formatLovelaceAsAda(minimumAdaByOutput[index])} ADA`
+                                  //     : undefined
+                                  // }
                                 >
                                   <InputNumber
                                     stringMode
                                     step="1"
-                                    min="0.969750"
+                                    min={
+                                      minimumAdaByOutput[index]
+                                        ? TransactionUtils.formatLovelaceAsAda(minimumAdaByOutput[index])
+                                        : "0"
+                                    }
                                     precision={6}
                                     size="large"
                                     placeholder="0.000000"
@@ -352,7 +388,7 @@ export const HomePage = () => {
                                               queuePreview()
                                             }}
                                             onClear={() => {}}
-                                            className="w-100p"
+                                            className="w-full"
                                             suffixIcon={<i className="xi xi-chevron_down" />}
                                             notFoundContent={
                                               <Empty

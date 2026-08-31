@@ -2,7 +2,14 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { createCardano } from "@xray-network/xray-js/cardano"
 import { createInMemoryProvider } from "@xray-network/xray-js/cardano/testing"
-import { buildSendAllTransaction, flattenTransactionOutputs } from "./transaction.ts"
+import {
+  buildSendAllTransaction,
+  flattenTransactionOutputs,
+  formatLovelaceAsAda,
+  inspectMinimumAda,
+  minimumLovelaceForOutput,
+  transactionErrorMessage,
+} from "./transaction.ts"
 
 const sourceAddress =
   "addr_test1qzd2ulz7jx0zn3t90vep26f7gl9wkj03lx0w5ca0vhnl5u6nfathe437695m4cwzlgn959uswtm56dkkmvxjx6h6mfssh7t4zy"
@@ -58,5 +65,38 @@ describe("Send All transactions", () => {
     )
 
     assert.deepEqual(summary, { value: 2_000_000n, assets: [asset] })
+  })
+})
+
+describe("Minimum ADA", () => {
+  it("calculates exact minima from the address and native-asset bundle", () => {
+    assert.equal(minimumLovelaceForOutput({ address: sourceAddress, assets: [] }, 4_310n), 978_370n)
+    assert.equal(minimumLovelaceForOutput({ address: recipientAddress, assets: [] }, 4_310n), 857_690n)
+    assert.equal(minimumLovelaceForOutput({ address: recipientAddress, assets: [asset] }, 4_310n), 1_030_090n)
+  })
+
+  it("reports every output below its independently calculated minimum", () => {
+    const inspection = inspectMinimumAda(
+      [
+        { address: sourceAddress, value: 978_369n, assets: [] },
+        { address: recipientAddress, value: 857_690n, assets: [] },
+        { address: recipientAddress, value: 1_000_000n, assets: [asset] },
+      ],
+      4_310n
+    )
+
+    assert.deepEqual(inspection.minimums, [978_370n, 857_690n, 1_030_090n])
+    assert.deepEqual(inspection.violations, [
+      { outputIndex: 0, value: 978_369n, minimum: 978_370n },
+      { outputIndex: 2, value: 1_000_000n, minimum: 1_030_090n },
+    ])
+  })
+
+  it("formats exact lovelace and recognizes the current builder error", () => {
+    assert.equal(formatLovelaceAsAda(978_370n), "0.978370")
+    assert.equal(
+      transactionErrorMessage(new RangeError("transaction output coin is below minimum ADA 978370")),
+      "Minimum ADA required: 0.978370 ADA"
+    )
   })
 })

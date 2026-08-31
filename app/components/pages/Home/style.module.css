@@ -50,10 +50,6 @@
   @apply block min-w-8 font-bold;
 }
 
-.assetOption {
-  @apply px-2.5! py-2!;
-}
-
 .assetTickerAda {
   width: 60%;
 
@@ -72,11 +68,11 @@
 }
 
 .assetQuantity {
-  width: calc(40% - 50px);
+  width: calc(40% - 42px);
 }
 
 .assetRemove {
-  width: 50px;
+  width: 42px;
 
   :global(.ant-btn) {
     @apply text-gray-500 w-12;
@@ -99,7 +95,7 @@
 
 .assetInfo {
   @apply flex items-center uppercase font-bold;
-  @apply dark:text-white;
+  @apply dark:text-white h-[24px];
 }
 
 .assetIcon {
