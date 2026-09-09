@@ -26,19 +26,24 @@ export const HomePage = () => {
   const cardano = useCardano()
   const web3 = cardano.status === "ready" ? cardano.client : null
   const addresses = cardano.status === "ready" ? cardano.addresses : null
-  const accountState = cardanoV1.useAccountState().data
+  const account = cardanoV1.useAccountState()
   const status = platformV1.useStatus()
+  const accountState = account.data?.balanceStatus === "ready" ? account.data : null
   const standalone = typeof window !== "undefined" && window.parent === window
-  const unavailableMessage = status.data?.account
-    ? "Cardano account data is not yet available."
-    : status.data
-      ? "Select a Cardano account in XRAY App before creating a transaction."
-      : standalone
-        ? "Open this mini app inside XRAY App before creating a transaction."
-        : "XRAY App did not respond to the platform status request."
+  const unavailableMessage = standalone
+    ? "Open this mini app inside XRAY App before creating a transaction."
+    : status.error
+      ? "Could not load platform status from XRAY App."
+      : !status.data
+        ? "Connecting to XRAY App…"
+        : !status.data.account
+          ? "Select a Cardano account in XRAY App before creating a transaction."
+          : account.error || account.data?.balanceStatus === "error"
+            ? "XRAY App could not load the selected account balance."
+            : "Cardano account data is still loading."
 
-  const accountAssets = accountState?.state?.balance?.assets ?? []
-  const accountUtxos = accountState?.state?.utxos ?? []
+  const accountAssets = accountState?.state.balance.assets ?? []
+  const accountUtxos = accountState?.state.utxos ?? []
 
   const decimalsList = useMemo(
     () =>
@@ -150,15 +155,19 @@ export const HomePage = () => {
 
       if (action !== "send") return
       try {
-        const response = await clientCardanoV1.signAndSubmitTx(txData.cbor)
-        const result = response?.payload
-        if (!result) throw new Error("XRAY App did not return a submission result")
-        if (result.success) {
-          notification.success({ message: "Transaction submitted", description: result.hash })
+        const signed = await clientCardanoV1.signTx(txData.cbor)
+        if (!signed.ok) {
+          setError(signed.error.message)
+          notification.error({ message: "Transaction was not signed", description: signed.error.message })
           return
         }
-        setError(result.error)
-        notification.error({ message: "Transaction was not submitted", description: result.error })
+        const submitted = await clientCardanoV1.submitTx(signed.payload.cbor)
+        if (!submitted.ok) {
+          setError(submitted.error.message)
+          notification.error({ message: "Transaction was not submitted", description: submitted.error.message })
+          return
+        }
+        notification.success({ message: "Transaction submitted", description: submitted.payload.hash })
       } catch (cause: unknown) {
         const nextError = TransactionUtils.transactionErrorMessage(cause)
         setError(nextError)
