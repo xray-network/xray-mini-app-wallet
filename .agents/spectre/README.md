@@ -1,4 +1,4 @@
-# XRAY Mini App Cardano Wallet SPECTRE
+# xray-mini-app-cardano-wallet SPECTRE
 
 This directory is the canonical home for the installed SPECTRE protocol, implementation
 instructions and results, and shared provider evidence. SPECTRE runs on explicit human `/spectre`
