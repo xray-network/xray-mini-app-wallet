@@ -27,8 +27,8 @@
   "scripts": {
     "dev": "react-router dev --host --port 10001",
     "build": "react-router build",
-    "deploy": "npm run build && wrangler pages deploy",
-    "preview": "npm run build && wrangler pages dev build/client",
+    "deploy": "npm run build && wrangler deploy",
+    "preview": "npm run build && wrangler dev",
     "test": "node --test app/integrations/xray-js/transaction.test.js",
     "typecheck": "react-router typegen && tsc",
     "format": "prettier --write \"./**/*.{ts,tsx,js,jsx,json,md,mdx,css,scss}\""
