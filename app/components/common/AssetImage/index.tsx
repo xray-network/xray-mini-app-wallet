@@ -11,7 +11,7 @@ const AssetImage = ({
   const url =
     assetId === "ada"
       ? `/resources/icons/cardano.png`
-      : `https://graph.xray.app/output/services/nftcdn/${network}/api/v1/image/${assetId}?size=${size}&prefer=cip26`
+      : `https://graph.xray.app/output/services/xray-nftcdn-cardano/${network}-api-v1/image/${assetId}?size=${size}&prefer=cip26`
   return <img src={url} />
 }
 
